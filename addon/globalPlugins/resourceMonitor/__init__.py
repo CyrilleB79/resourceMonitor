@@ -7,9 +7,12 @@ import winreg
 from datetime import datetime
 import sys
 import os
+import threading
+from time import sleep
 import globalPluginHandler
 import ui
 import api
+from tones import beep
 import scriptHandler
 from . import psutil
 import addonHandler
@@ -232,6 +235,37 @@ def _win10RID(buildNum, isClient):
 
 
 class GlobalPlugin(globalPluginHandler.GlobalPlugin):
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.checkThread = threading.Thread(target=self.bgMemoryCheck, args=())
+		self._stop = threading.Event()
+		self.checkThread.start()
+		
+	def terminate(self):
+		super().terminate()
+		self._stop.set()
+		self.checkThread.join()
+		
+	def bgMemoryCheck(self):
+		while not self._stop.is_set():
+			if self.memoryCheck():
+				self.alert()
+				for n in range(15):
+					sleep(1)
+					if self._stop.is_set():
+						return
+			sleep(1)
+			
+	def memoryCheck(self):
+		# ram = psutil.virtual_memory()
+		virtualRam = psutil.swap_memory()
+		return virtualRam.percent >= 90
+		
+	def alert(self):
+		for f in [880, 0, 880, 0, 880]:
+			beep(f, 80)
+			sleep(0.08)
 
 	# Translators: The gestures category for this add-on in input gestures dialog (2013.3 or later).
 	scriptCategory = _("Resource Monitor")
